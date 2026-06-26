@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">AI comic identification and value lookup</p>
+    <h1>Turn a comic cover photo into a catalog-ready estimate.</h1>
+    <p class="lede">
+      Upload a comic book image, get an AI description, and check it against your value database from a secure user account.
+    </p>
+    <div class="hero-actions">
+      <a class="primary-button" href="{{ url_for('register') }}">Create account</a>
+      <a class="secondary-button" href="{{ url_for('login') }}">Log in</a>
+    </div>
+  </div>
+  <div class="cover-wall" aria-hidden="true">
+    <div class="cover red">ASM<br>#300</div>
+    <div class="cover yellow">BAT<br>#1</div>
+    <div class="cover blue">X-MEN<br>#1</div>
+    <div class="cover green">SPAWN<br>#1</div>
+  </div>
+</section>
+{% endblock %}

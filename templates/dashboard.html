@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | ComicVault{% endblock %}
+
+{% block content %}
+<section class="workspace">
+  <div class="upload-panel">
+    <div>
+      <p class="eyebrow">New scan</p>
+      <h1>Upload a comic cover</h1>
+    </div>
+    <form class="upload-form" action="{{ url_for('scan') }}" method="post" enctype="multipart/form-data">
+      <input id="comic_image" name="comic_image" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" required>
+      <button class="primary-button" type="submit">Analyze comic</button>
+    </form>
+  </div>
+
+  <section class="history">
+    <h2>Recent scans</h2>
+    {% if scans %}
+      <div class="scan-grid">
+        {% for scan in scans %}
+          <article class="scan-card">
+            <p class="scan-title">{{ scan.title_guess or "Unknown comic" }}</p>
+            <p class="meta">
+              {% if scan.issue_guess %}#{{ scan.issue_guess }}{% endif %}
+              {% if scan.publisher_guess %} · {{ scan.publisher_guess }}{% endif %}
+            </p>
+            <p>{{ scan.description }}</p>
+            <div class="value-box">{{ scan.value_summary }}</div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty-state">Your analyzed comics will appear here.</p>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}
