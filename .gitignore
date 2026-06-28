@@ -5,16 +5,24 @@ __pycache__/
 
 # Virtual Environment
 venv/
+.venv/
 .env
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3
 
 # VS Code
 .vscode/
 
 # uploads
 backend/uploads/
+uploads/
 
 # Logs
 *.log
+server.err
 
 # OS
 .DS_Store
