@@ -258,6 +258,27 @@ input:focus {
   color: var(--muted);
 }
 
+.description {
+  line-height: 1.55;
+}
+
+.term-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.term-list span {
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #f7fbff;
+  color: var(--blue);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .value-box {
   margin-top: 16px;
   border-left: 5px solid var(--yellow);

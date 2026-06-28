@@ -22,7 +22,7 @@ from openai import OpenAI
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-load_dotenv()
+load_dotenv(override=True)
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / os.getenv("DATABASE_PATH", "comic_app.db")
@@ -84,15 +84,26 @@ def init_db():
                 issue_guess TEXT,
                 publisher_guess TEXT,
                 description TEXT NOT NULL,
+                search_terms TEXT,
                 value_summary TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             );
             """
         )
+        ensure_scan_columns(conn)
         count = conn.execute("SELECT COUNT(*) FROM comic_values").fetchone()[0]
         if count == 0:
             seed_values(conn)
+        repair_raw_json_scans(conn)
+
+
+def ensure_scan_columns(conn):
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(scans)").fetchall()
+    }
+    if "search_terms" not in columns:
+        conn.execute("ALTER TABLE scans ADD COLUMN search_terms TEXT")
 
 
 def seed_values(conn):
@@ -133,6 +144,17 @@ def inject_current_user():
     return {"current_user": g.get("current_user")}
 
 
+@app.template_filter("from_json")
+def from_json_filter(value):
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
 def login_required(view):
     @wraps(view)
     def wrapped_view(*args, **kwargs):
@@ -145,6 +167,83 @@ def login_required(view):
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def strip_json_markdown(text):
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines:
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    return cleaned
+
+
+def normalize_analysis(parsed):
+    search_terms = parsed.get("search_terms", [])
+    if isinstance(search_terms, str):
+        search_terms = [term.strip() for term in search_terms.split(",") if term.strip()]
+    elif not isinstance(search_terms, list):
+        search_terms = []
+
+    return {
+        "title_guess": str(parsed.get("title_guess") or "Unknown").strip(),
+        "issue_guess": str(parsed.get("issue_guess") or "").strip(),
+        "publisher_guess": str(parsed.get("publisher_guess") or "").strip(),
+        "description": str(parsed.get("description") or "").strip(),
+        "search_terms": [str(term).strip() for term in search_terms if str(term).strip()],
+    }
+
+
+def parse_analysis_text(text):
+    cleaned = strip_json_markdown(text)
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return {
+            "title_guess": "Unknown",
+            "issue_guess": "",
+            "publisher_guess": "",
+            "description": text.strip(),
+            "search_terms": [],
+        }
+    return normalize_analysis(parsed)
+
+
+def repair_raw_json_scans(conn):
+    rows = conn.execute(
+        """
+        SELECT id, description
+        FROM scans
+        WHERE description LIKE '```json%'
+           OR description LIKE '{%'
+        """
+    ).fetchall()
+    for row in rows:
+        analysis = parse_analysis_text(row["description"])
+        if analysis["description"] == row["description"]:
+            continue
+        conn.execute(
+            """
+            UPDATE scans
+            SET title_guess = ?,
+                issue_guess = ?,
+                publisher_guess = ?,
+                description = ?,
+                search_terms = ?
+            WHERE id = ?
+            """,
+            (
+                analysis["title_guess"],
+                analysis["issue_guess"],
+                analysis["publisher_guess"],
+                analysis["description"],
+                json.dumps(analysis["search_terms"]),
+                row["id"],
+            ),
+        )
 
 
 def analyze_comic_image(image_path):
@@ -183,18 +282,7 @@ def analyze_comic_image(image_path):
         ],
     )
 
-    text = response.output_text.strip()
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        parsed = {
-            "title_guess": "Unknown",
-            "issue_guess": "",
-            "publisher_guess": "",
-            "description": text,
-            "search_terms": text[:120],
-        }
-    return parsed
+    return parse_analysis_text(response.output_text)
 
 
 def find_value_match(analysis):
@@ -338,8 +426,8 @@ def scan():
         conn.execute(
             """
             INSERT INTO scans
-            (user_id, image_filename, title_guess, issue_guess, publisher_guess, description, value_summary, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, image_filename, title_guess, issue_guess, publisher_guess, description, search_terms, value_summary, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 g.current_user.id,
@@ -348,6 +436,7 @@ def scan():
                 analysis.get("issue_guess", ""),
                 analysis.get("publisher_guess", ""),
                 analysis.get("description", ""),
+                json.dumps(analysis.get("search_terms", [])),
                 value_result["summary"],
                 datetime.now(timezone.utc).isoformat(),
             ),

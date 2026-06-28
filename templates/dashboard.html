@@ -24,9 +24,17 @@
             <p class="scan-title">{{ scan.title_guess or "Unknown comic" }}</p>
             <p class="meta">
               {% if scan.issue_guess %}#{{ scan.issue_guess }}{% endif %}
-              {% if scan.publisher_guess %} · {{ scan.publisher_guess }}{% endif %}
+              {% if scan.publisher_guess %} &middot; {{ scan.publisher_guess }}{% endif %}
             </p>
-            <p>{{ scan.description }}</p>
+            <p class="description">{{ scan.description }}</p>
+            {% set terms = scan.search_terms | from_json %}
+            {% if terms %}
+              <div class="term-list" aria-label="Search terms">
+                {% for term in terms %}
+                  <span>{{ term }}</span>
+                {% endfor %}
+              </div>
+            {% endif %}
             <div class="value-box">{{ scan.value_summary }}</div>
           </article>
         {% endfor %}
